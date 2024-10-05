@@ -6,7 +6,7 @@ interface Point {
   y: number;
 }
 
-const ModifiablePolygonWithFillAndEdgeTooltip: React.FC = () => {
+const PolygonTool: React.FC = () => {
   const [points, setPoints] = useState<Point[]>([
     { x: 100, y: 100 },
     { x: 200, y: 50 },
@@ -102,4 +102,4 @@ const ModifiablePolygonWithFillAndEdgeTooltip: React.FC = () => {
   );
 };
 
-export default ModifiablePolygonWithFillAndEdgeTooltip;
+export default PolygonTool;
