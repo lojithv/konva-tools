@@ -6,100 +6,238 @@ interface Point {
   y: number;
 }
 
-const PolygonTool: React.FC = () => {
-  const [points, setPoints] = useState<Point[]>([
-    { x: 100, y: 100 },
-    { x: 200, y: 50 },
-    { x: 300, y: 150 },
-    { x: 200, y: 250 },
-    { x: 100, y: 200 }
-  ]);
+interface Polygon {
+  points: Point[];
+  isCompleted: boolean;
+}
 
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string } | null>(null);
+// Utility function to calculate the polygon's area using the Shoelace theorem
+const calculatePolygonArea = (points: Point[], scale: number, dpi: number) => {
+  let area = 0;
+  const n = points.length;
+  for (let i = 0; i < n; i++) {
+    const { x: x1, y: y1 } = points[i];
+    const { x: x2, y: y2 } = points[(i + 1) % n];
+    area += x1 * y2 - x2 * y1;
+  }
+  return Math.abs(area / 2) * (scale / dpi) * (scale / dpi);
+};
 
-  const handleDragMove = (index: number, e: any) => {
-    const newPoints = points.map((point, i) =>
-      i === index
-        ? {
-            x: e.target.x(),
-            y: e.target.y()
-          }
-        : point
-    );
-    setPoints(newPoints);
+// Helper function to calculate the centroid of a polygon
+const calculateCentroid = (points: Point[]) => {
+  let xSum = 0, ySum = 0;
+  points.forEach((p) => {
+    xSum += p.x;
+    ySum += p.y;
+  });
+  const xCenter = xSum / points.length;
+  const yCenter = ySum / points.length;
+  return { x: xCenter, y: yCenter };
+};
+
+// Helper function to calculate the distance between two points (Euclidean distance)
+const calculateDistance = (p1: Point, p2: Point, scale:number, dpi: number) => {
+  const dx = p1.x - p2.x;
+  const dy = p1.y - p2.y;
+  return Math.sqrt(dx * dx + dy * dy) * (scale / dpi); // Convert to feet using the scale
+};
+
+// Helper function to calculate the midpoint between two points
+const calculateMidpoint = (p1: Point, p2: Point) => {
+  return {
+    x: (p1.x + p2.x) / 2,
+    y: (p1.y + p2.y) / 2
+  };
+};
+
+// Helper function to check if a click is near the first point (within a tolerance)
+const isCloseToFirstPoint = (firstPoint: Point, newPoint: Point, tolerance = 10) => {
+  const dx = firstPoint.x - newPoint.x;
+  const dy = firstPoint.y - newPoint.y;
+  return Math.sqrt(dx * dx + dy * dy) < tolerance;
+};
+
+const PolygonDrawingTool: React.FC = () => {
+  const [polygons, setPolygons] = useState<Polygon[]>([]);
+  const [currentPolygon, setCurrentPolygon] = useState<Point[]>([]);
+  const [isDrawingEnabled, setIsDrawingEnabled] = useState(false);
+  const [scale, setScale] = useState(10); // Default scale (1 inch = 10 feet)
+  const [dpi, setDpi] = useState(72); // Default DPI
+
+  // Handle stage click to add points to the current polygon
+  const handleStageClick = (e: any) => {
+    if (!isDrawingEnabled) return;
+
+    const stage = e.target.getStage();
+    const pointerPosition = stage.getPointerPosition();
+
+    if (pointerPosition) {
+      if (currentPolygon.length === 0) {
+        // Start drawing by adding the first point
+        setCurrentPolygon([pointerPosition]);
+      } else {
+        // Check if we are closing the polygon by clicking near the first point
+        if (isCloseToFirstPoint(currentPolygon[0], pointerPosition)) {
+          // Calculate the polygon area
+
+
+          // Create a completed polygon and add it to the array
+          const newPolygon: Polygon = {
+            points: currentPolygon,
+            isCompleted: true,
+          };
+          setPolygons([...polygons, newPolygon]);
+          setCurrentPolygon([]);
+        } else {
+          // Continue adding points to the current polygon
+          setCurrentPolygon([...currentPolygon, pointerPosition]);
+        }
+      }
+    }
   };
 
-  const handleMouseEnterEdge = (start: Point, end: Point) => {
-    const distance = calculateDistance(start, end);
-    setTooltip({
-      x: (start.x + end.x) / 2,
-      y: (start.y + end.y) / 2 - 20,
-      text: `Length: ${distance.toFixed(2)}`
+  // Enable/Disable the drawing mode
+  const toggleDrawingMode = () => {
+    setIsDrawingEnabled(!isDrawingEnabled);
+    if (!isDrawingEnabled) {
+      // Reset the current polygon when re-enabling drawing mode
+      setCurrentPolygon([]);
+    }
+  };
+
+  // Handle drag of individual points (vertices) of polygons
+  const handleDragMove = (polygonIndex: number, pointIndex: number, e: any) => {
+    const newPolygons = polygons.map((polygon, pIndex) => {
+      if (polygonIndex === pIndex) {
+        const newPoints = polygon.points.map((point, i) =>
+          i === pointIndex
+            ? { x: e.target.x(), y: e.target.y() }
+            : point
+        );
+        return {
+          ...polygon,
+          points: newPoints,
+        };
+      }
+      return polygon;
     });
+    setPolygons(newPolygons);
   };
 
-  const handleMouseLeaveEdge = () => {
-    setTooltip(null);
-  };
-
-  const calculateDistance = (p1: Point, p2: Point) => {
-    return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
-  };
-
-  const linePoints = points.flatMap((p) => [p.x, p.y]);
+  // Convert points array to Line component compatible format
+  const convertPointsToLine = (points: Point[]) => points.flatMap((p) => [p.x, p.y]);
 
   return (
-    <Stage width={window.innerWidth} height={window.innerHeight}>
-      <Layer>
-        <Line
-          points={linePoints}
-          fill="lightblue"
-          stroke="blue"
-          strokeWidth={3}
-          closed
-        />
+    <div>
+      <button onClick={toggleDrawingMode}>
+        {isDrawingEnabled ? 'Disable Drawing' : 'Enable Drawing'}
+      </button>
 
-        {points.map((point, index) => {
-          const nextIndex = (index + 1) % points.length;
-          const nextPoint = points[nextIndex];
-          return (
+      {/* Input fields for scale and DPI */}
+      <div>
+        <label>
+          Scale (1 inch = 
+          <input
+            type="number"
+            value={scale}
+            onChange={(e) => setScale(Number(e.target.value))}
+            style={{ width: '80px', marginLeft: '5px' }}
+          />
+          feet)
+        </label>
+        <label style={{ marginLeft: '20px' }}>
+          DPI: 
+          <input
+            type="number"
+            value={dpi}
+            onChange={(e) => setDpi(Number(e.target.value))}
+            style={{ width: '60px', marginLeft: '5px' }}
+          />
+        </label>
+      </div>
+
+      <Stage
+        width={window.innerWidth}
+        height={window.innerHeight}
+        onClick={handleStageClick}
+      >
+        <Layer>
+          {/* Render all polygons */}
+          {polygons.map((polygon, polygonIndex) => (
+            <React.Fragment key={polygonIndex}>
+              <Line
+                points={convertPointsToLine(polygon.points)}
+                fill="lightblue"
+                stroke="blue"
+                strokeWidth={2}
+                closed
+              />
+              {/* Render draggable handles (circles) for each point of the polygon */}
+              {polygon.points.map((point, pointIndex) => (
+                <Circle
+                  key={pointIndex}
+                  x={point.x}
+                  y={point.y}
+                  radius={5}
+                  fill="red"
+                  draggable
+                  onDragMove={(e) => handleDragMove(polygonIndex, pointIndex, e)}
+                />
+              ))}
+              {/* Display the area at the center of the polygon */}
+              <Text
+                x={calculateCentroid(polygon.points).x}
+                y={calculateCentroid(polygon.points).y}
+                text={`Area: ${calculatePolygonArea(polygon.points, scale, dpi).toFixed(2)} sq ft`}
+                fontSize={18}
+                fill="black"
+              />
+              {/* Render lengths for each side */}
+              {polygon.points.map((point, index) => {
+                const nextPoint = polygon.points[(index + 1) % polygon.points.length];
+                const distance = calculateDistance(point, nextPoint, scale, dpi);
+                const midpoint = calculateMidpoint(point, nextPoint);
+
+                return (
+                  <Text
+                    key={`length-${index}`}
+                    x={midpoint.x}
+                    y={midpoint.y}
+                    text={`${distance.toFixed(2)} ft`} // Keep in feet
+                    fontSize={14}
+                    fill="green"
+                  />
+                );
+              })}
+            </React.Fragment>
+          ))}
+
+          {/* Render the current polygon being drawn */}
+          {currentPolygon.length > 1 && (
             <Line
-              key={index}
-              points={[point.x, point.y, nextPoint.x, nextPoint.y]}
-              stroke="transparent"
-              strokeWidth={10}
-              onMouseEnter={() => handleMouseEnterEdge(point, nextPoint)}
-              onMouseLeave={handleMouseLeaveEdge}
+              points={convertPointsToLine(currentPolygon)}
+              fill="transparent"
+              stroke="blue"
+              strokeWidth={2}
+              closed={false}
             />
-          );
-        })}
+          )}
 
-        {points.map((point, index) => (
-          <Circle
-            key={index}
-            x={point.x}
-            y={point.y}
-            radius={8}
-            fill="red"
-            draggable
-            onDragMove={(e) => handleDragMove(index, e)}
-          />
-        ))}
-
-        {tooltip && (
-          <Text
-            x={tooltip.x}
-            y={tooltip.y}
-            text={tooltip.text}
-            fontSize={16}
-            fill="black"
-            padding={5}
-            backgroundColor="white"
-          />
-        )}
-      </Layer>
-    </Stage>
+          {/* Render draggable handles (circles) for current polygon */}
+          {currentPolygon.map((point, index) => (
+            <Circle
+              key={index}
+              x={point.x}
+              y={point.y}
+              radius={5}
+              fill="red"
+              draggable={false} // Handles for the current polygon are not draggable until finalized
+            />
+          ))}
+        </Layer>
+      </Stage>
+    </div>
   );
 };
 
-export default PolygonTool;
+export default PolygonDrawingTool;
