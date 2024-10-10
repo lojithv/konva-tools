@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Stage, Layer, Line, Circle, Text } from 'react-konva';
 
 interface Point {
@@ -64,6 +64,8 @@ const PolygonDrawingTool: React.FC = () => {
   const [scale, setScale] = useState(10); // Default scale (1 inch = 10 feet)
   const [dpi, setDpi] = useState(72); // Default DPI
 
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   // Handle stage click to add points to the current polygon
   const handleStageClick = (e: any) => {
     if (!isDrawingEnabled) return;
@@ -127,11 +129,67 @@ const PolygonDrawingTool: React.FC = () => {
   // Convert points array to Line component compatible format
   const convertPointsToLine = (points: Point[]) => points.flatMap((p) => [p.x, p.y]);
 
+  function saveDrawing(): void {
+    //save konva stage as a json file, save the scale and DPI value as well
+
+    const json = JSON.stringify({polygons:polygons, scale:scale, dpi:dpi});
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href  = url;
+    a.download = 'drawing.json';
+    a.click();
+  }
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && file.type === 'application/json') {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const fileContents = e.target?.result as string;
+        try {
+          const parsed = JSON.parse(fileContents);
+          setPolygons(parsed.polygons);
+          setScale(parsed.scale);
+          setDpi(parsed.dpi);
+          console.log('Parsed JSON:', parsed);
+        } catch (error) {
+          console.error('Error parsing JSON:', error);
+        }
+      };
+      reader.readAsText(file); // Read file as text
+    } else {
+      console.error('Please upload a valid JSON file.');
+    }
+  };
+
+  function importDrawing(): void {
+    if (fileInputRef.current) {
+      fileInputRef.current.click(); // Programmatically click the file input
+    }
+  }
+
   return (
     <div>
-      <button onClick={toggleDrawingMode}>
+      <div className="flex gap-5">
+      <button className='border p-2 m-2' onClick={toggleDrawingMode}>
         {isDrawingEnabled ? 'Disable Drawing' : 'Enable Drawing'}
       </button>
+
+      <button className='border p-2 m-2' onClick={saveDrawing}>
+        Save Drawing
+      </button>
+
+      <input
+        type="file"
+        ref={fileInputRef}
+        style={{ display: 'none' }}
+        onChange={handleFileChange}
+      />
+      <button className='border p-2 m-2' onClick={importDrawing}>
+        Import Drawing
+      </button>
+      </div>
 
       {/* Input fields for scale and DPI */}
       <div>

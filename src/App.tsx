@@ -1,11 +1,11 @@
 import './App.css'
-import PolygonComponent from './components/PolygonTool'
+import PolygonDrawingTool from './components/PolygonTool'
 
 function App() {
 
   return (
     <>
-      <PolygonComponent />
+      <PolygonDrawingTool />
     </>
   )
 }
